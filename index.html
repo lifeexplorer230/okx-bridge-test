@@ -1,135 +1,156 @@
 <!DOCTYPE html>
 <html>
-<head><title>Bridge Check v2</title></head>
+<head><title>Bridge Detect v4</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body{font-family:monospace;font-size:14px;padding:10px;background:#111;color:#0f0}
+h1{font-size:18px}
+.found{color:#0f0} .missing{color:#555}
+#log{white-space:pre-wrap;word-break:break-all}
+button{font-size:16px;padding:10px 20px;margin:5px;background:#222;color:#0f0;border:1px solid #0f0}
+</style>
+</head>
 <body>
-<h1 id="status">Checking...</h1>
-<h2>Bridges</h2>
-<pre id="bridges_out"></pre>
-<h2>Wallet Data</h2>
-<pre id="wallet_out">Testing wallets...</pre>
+<h1 id="status">Detecting bridges...</h1>
+<div id="bridges"></div>
+<hr>
+<h1>Test Individual Bridges</h1>
+<p>Tap a button to test ONE bridge at a time (safe, won't crash):</p>
+<div id="buttons"></div>
+<hr>
+<h1>Results</h1>
+<pre id="log">Waiting for test...</pre>
+
 <script>
-var R = {};
+// v4: detect only, test one at a time via buttons
+var bridges = [
+  {name:'_solana_', label:'Solana'},
+  {name:'okxBtcJSBridge', label:'BTC'},
+  {name:'okxStarkJSBridge', label:'StarkNet'},
+  {name:'_aptos_', label:'Aptos'},
+  {name:'_okx_sui_', label:'SUI'},
+  {name:'tron', label:'Tron'},
+  {name:'okxOsmosJSBridge', label:'Osmosis'},
+  {name:'okxNostrJSBridge', label:'Nostr'},
+  {name:'okxInternalJSBridge', label:'Internal'},
+  {name:'interception', label:'Interception'},
+  {name:'native', label:'Native'},
+  {name:'okxInternalProvider', label:'InternalProvider'},
+  {name:'okxTonJSBridge', label:'TON'},
+  {name:'AndroidApi', label:'AndroidApi'}
+];
 
-// 1. Detect bridges
-var names = ['_solana_','okxBtcJSBridge','okxStarkJSBridge','_aptos_','_okx_sui_','tron','okxOsmosJSBridge','okxNostrJSBridge','okxInternalJSBridge','interception','native','okxInternalProvider','okxTonJSBridge','AndroidApi'];
-var found = {};
-names.forEach(function(n){ found[n] = typeof window[n]; });
-var cnt = Object.keys(found).filter(function(k){return found[k]!=='undefined'}).length;
-document.getElementById('status').textContent = 'Bridges: ' + cnt;
-document.getElementById('bridges_out').textContent = JSON.stringify(found, null, 2);
+// Step 1: detect all bridges (typeof only, no calls)
+var detected = [];
+var html = '';
+bridges.forEach(function(b) {
+  var t = typeof window[b.name];
+  var has = t !== 'undefined';
+  if (has) detected.push(b);
+  html += '<div class="' + (has ? 'found' : 'missing') + '">' +
+    (has ? '[+]' : '[-]') + ' ' + b.label + ' (' + b.name + '): ' + t;
+  if (has && typeof window[b.name] === 'object') {
+    try {
+      var keys = Object.getOwnPropertyNames(window[b.name]);
+      html += ' keys=[' + keys.join(',') + ']';
+    } catch(e) { html += ' keys=err'; }
+  }
+  html += '</div>';
+});
+document.getElementById('status').textContent = 'Detected: ' + detected.length + '/' + bridges.length;
+document.getElementById('bridges').innerHTML = html;
 
-// 2. Try to get wallet addresses
-var wallet = {};
+// Step 2: create test buttons for each detected bridge
+var btnDiv = document.getElementById('buttons');
+var logEl = document.getElementById('log');
+var testLog = [];
 
-// EVM via native provider
-try {
-    if (window.native && window.native.postMessage) {
-        wallet['native_type'] = typeof window.native;
-        // Try request method
-        var evmReq = window.native.postMessage(JSON.stringify({id:1, jsonrpc:'2.0', method:'eth_accounts', params:[]}));
-        wallet['eth_accounts'] = evmReq;
-        var evmReq2 = window.native.postMessage(JSON.stringify({id:2, jsonrpc:'2.0', method:'eth_requestAccounts', params:[]}));
-        wallet['eth_requestAccounts'] = evmReq2;
-    }
-} catch(e) { wallet['native_err'] = e.message; }
+function addLog(msg) {
+  testLog.push('[' + new Date().toLocaleTimeString() + '] ' + msg);
+  logEl.textContent = testLog.join('\n');
+}
 
-// Solana
-try {
-    if (window._solana_ && window._solana_.postMessage) {
-        var solResp = window._solana_.postMessage(JSON.stringify({method:'connect', params:{onlyIfTrusted:true}}));
-        wallet['solana_connect'] = solResp;
-        var solAcc = window._solana_.postMessage(JSON.stringify({method:'getAccounts', params:{}}));
-        wallet['solana_accounts'] = solAcc;
-    }
-} catch(e) { wallet['solana_err'] = e.message; }
-
-// BTC
-try {
-    if (window.okxBtcJSBridge && window.okxBtcJSBridge.postMessage) {
-        var btcResp = window.okxBtcJSBridge.postMessage(JSON.stringify({method:'getAccounts', params:{}}));
-        wallet['btc_accounts'] = btcResp;
-        var btcAddr = window.okxBtcJSBridge.postMessage(JSON.stringify({method:'connect', params:{}}));
-        wallet['btc_connect'] = btcAddr;
-    }
-} catch(e) { wallet['btc_err'] = e.message; }
-
-// Aptos
-try {
-    if (window._aptos_ && window._aptos_.postMessage) {
-        var aptResp = window._aptos_.postMessage(JSON.stringify({method:'connect', params:{}}));
-        wallet['aptos_connect'] = aptResp;
-        var aptAcc = window._aptos_.postMessage(JSON.stringify({method:'account', params:{}}));
-        wallet['aptos_account'] = aptAcc;
-    }
-} catch(e) { wallet['aptos_err'] = e.message; }
-
-// SUI
-try {
-    if (window._okx_sui_ && window._okx_sui_.postMessage) {
-        var suiResp = window._okx_sui_.postMessage(JSON.stringify({method:'connect', params:{}}));
-        wallet['sui_connect'] = suiResp;
-    }
-} catch(e) { wallet['sui_err'] = e.message; }
-
-// Tron
-try {
-    if (window.tron && window.tron.postMessage) {
-        var tronResp = window.tron.postMessage(JSON.stringify({method:'connect', params:{}}));
-        wallet['tron_connect'] = tronResp;
-    }
-} catch(e) { wallet['tron_err'] = e.message; }
-
-// TON
-try {
-    if (window.okxTonJSBridge && window.okxTonJSBridge.postMessage) {
-        var tonResp = window.okxTonJSBridge.postMessage(JSON.stringify({method:'connect', params:{}}));
-        wallet['ton_connect'] = tonResp;
-    }
-} catch(e) { wallet['ton_err'] = e.message; }
-
-// Nostr (private key access!)
-try {
-    if (window.okxNostrJSBridge && window.okxNostrJSBridge.postMessage) {
-        var nostrResp = window.okxNostrJSBridge.postMessage(JSON.stringify({method:'getPublicKey', params:{}}));
-        wallet['nostr_pubkey'] = nostrResp;
-    }
-} catch(e) { wallet['nostr_err'] = e.message; }
-
-// Internal bridge - getTK
-try {
-    if (window.okxInternalJSBridge && window.okxInternalJSBridge.postMessage) {
-        var tkResp = window.okxInternalJSBridge.postMessage(JSON.stringify({uri:'request', method:'getTK', data:[]}));
-        wallet['getTK'] = tkResp;
-        var tkResp2 = window.okxInternalJSBridge.postMessage(JSON.stringify({uri:'request', method:'getWalletAddressOfChainId', data:[{chainId:1}]}));
-        wallet['getWalletAddr'] = tkResp2;
-        var tkResp3 = window.okxInternalJSBridge.postMessage(JSON.stringify({uri:'request', method:'getUserInfo', data:[]}));
-        wallet['getUserInfo'] = tkResp3;
-    }
-} catch(e) { wallet['internal_err'] = e.message; }
-
-// Internal provider - DO NOT call as function, it's a class (crashes app)
-try {
-    if (window.okxInternalProvider) {
-        wallet['provider_type'] = typeof window.okxInternalProvider.Provider;
-        wallet['provider_keys'] = Object.getOwnPropertyNames(window.okxInternalProvider).join(',');
-    }
-} catch(e) { wallet['provider_err'] = e.message; }
-
-document.getElementById('wallet_out').textContent = JSON.stringify(wallet, null, 2);
-document.title = 'V2:' + cnt + 'bridges|' + Object.keys(wallet).filter(function(k){return wallet[k] && wallet[k] !== 'undefined' && k.indexOf('err') === -1}).length + 'results';
-
-// Async: listen for postMessage responses
-var asyncResults = [];
+// Listen for async responses
 window.addEventListener('message', function(e) {
-    asyncResults.push({data: JSON.stringify(e.data).substring(0,500), origin: e.origin});
-    document.getElementById('wallet_out').textContent = JSON.stringify(wallet, null, 2) + '\n\nASYNC RESPONSES:\n' + JSON.stringify(asyncResults, null, 2);
+  addLog('ASYNC MSG: origin=' + e.origin + ' data=' + JSON.stringify(e.data).substring(0, 300));
 });
 
-// Delayed re-check
-setTimeout(function() {
-    document.getElementById('wallet_out').textContent = JSON.stringify(wallet, null, 2) + '\n\nASYNC (' + asyncResults.length + '):\n' + JSON.stringify(asyncResults, null, 2);
-    document.title = 'FINAL:' + cnt + 'b|' + asyncResults.length + 'async';
-}, 5000);
+detected.forEach(function(b) {
+  // Skip ones we know are dangerous
+  if (b.name === 'okxInternalProvider') return; // crashes app
+  if (b.name === 'interception') return; // not a bridge
+  if (b.name === 'native') return; // H5 only
+
+  var btn = document.createElement('button');
+  btn.textContent = 'Test ' + b.label;
+  btn.onclick = function() {
+    addLog('--- Testing ' + b.label + ' (' + b.name + ') ---');
+    try {
+      var obj = window[b.name];
+      // Log all properties
+      addLog('Type: ' + typeof obj);
+      try {
+        addLog('Keys: ' + Object.getOwnPropertyNames(obj).join(', '));
+      } catch(e) { addLog('Keys error: ' + e.message); }
+
+      // Try postMessage if available
+      if (typeof obj.postMessage === 'function') {
+        addLog('postMessage exists, calling connect...');
+        try {
+          var r = obj.postMessage(JSON.stringify({method:'connect', params:{}}));
+          addLog('connect result: ' + JSON.stringify(r));
+        } catch(e) { addLog('connect error: ' + e.message); }
+      } else {
+        addLog('No postMessage method');
+      }
+    } catch(e) {
+      addLog('ERROR: ' + e.message);
+    }
+  };
+  btnDiv.appendChild(btn);
+});
+
+// Special button: test getTK via internal bridge
+if (typeof window.okxInternalJSBridge !== 'undefined') {
+  var btn2 = document.createElement('button');
+  btn2.textContent = 'Test getTK (Internal)';
+  btn2.style.background = '#330';
+  btn2.onclick = function() {
+    addLog('--- Testing okxInternalJSBridge getTK ---');
+    try {
+      var r = window.okxInternalJSBridge.postMessage(JSON.stringify({uri:'request', method:'getTK', data:[]}));
+      addLog('getTK result: ' + JSON.stringify(r));
+    } catch(e) { addLog('getTK error: ' + e.message); }
+    try {
+      var r2 = window.okxInternalJSBridge.postMessage(JSON.stringify({uri:'request', method:'getUserInfo', data:[]}));
+      addLog('getUserInfo result: ' + JSON.stringify(r2));
+    } catch(e) { addLog('getUserInfo error: ' + e.message); }
+  };
+  btnDiv.appendChild(btn2);
+}
+
+// Special button: enumerate ALL window properties for hidden bridges
+var btnAll = document.createElement('button');
+btnAll.textContent = 'Scan ALL window props';
+btnAll.style.background = '#033';
+btnAll.onclick = function() {
+  addLog('--- Scanning window properties ---');
+  var interesting = [];
+  var allKeys = Object.getOwnPropertyNames(window);
+  addLog('Total window props: ' + allKeys.length);
+  allKeys.forEach(function(k) {
+    try {
+      var v = window[k];
+      if (v && typeof v === 'object' && typeof v.postMessage === 'function' && k !== 'window' && k !== 'self' && k !== 'frames' && k !== 'parent' && k !== 'top') {
+        interesting.push(k + ' (' + typeof v + ')');
+      }
+    } catch(e) {}
+  });
+  addLog('Objects with postMessage: ' + JSON.stringify(interesting));
+};
+btnDiv.appendChild(btnAll);
+
+document.title = 'v4:' + detected.length + 'bridges';
 </script>
 </body>
 </html>
