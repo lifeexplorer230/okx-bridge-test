@@ -3,154 +3,278 @@
 <head><title>Bridge Check v2</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body{font-family:monospace;font-size:14px;padding:10px;background:#111;color:#0f0}
-h1{font-size:18px}
+body{font-family:monospace;font-size:13px;padding:8px;background:#111;color:#0f0}
+h1{font-size:16px;margin:8px 0}
+h2{font-size:14px;margin:6px 0;color:#ff0}
 .found{color:#0f0} .missing{color:#555}
-#log{white-space:pre-wrap;word-break:break-all}
-button{font-size:16px;padding:10px 20px;margin:5px;background:#222;color:#0f0;border:1px solid #0f0}
+#log{white-space:pre-wrap;word-break:break-all;font-size:12px}
+button{font-size:14px;padding:8px 14px;margin:3px;background:#222;color:#0f0;border:1px solid #0f0}
+.warn{background:#330;border-color:#ff0}
+.info{background:#033;border-color:#0ff}
 </style>
 </head>
 <body>
-<h1 id="status">Detecting bridges...</h1>
+<h1 id="status">Detecting...</h1>
+
+<h2>1. Low-level bridges (native)</h2>
 <div id="bridges"></div>
-<hr>
-<h1>Test Individual Bridges</h1>
-<p>Tap a button to test ONE bridge at a time (safe, won't crash):</p>
+
+<h2>2. High-level providers (injected JS)</h2>
+<div id="providers"></div>
+
+<h2>3. Test buttons</h2>
 <div id="buttons"></div>
-<hr>
-<h1>Results</h1>
-<pre id="log">Waiting for test...</pre>
+
+<h2>4. Results</h2>
+<pre id="log">Tap a button above...</pre>
 
 <script>
-// v4: detect only, test one at a time via buttons
-var bridges = [
-  {name:'_solana_', label:'Solana'},
-  {name:'okxBtcJSBridge', label:'BTC'},
-  {name:'okxStarkJSBridge', label:'StarkNet'},
-  {name:'_aptos_', label:'Aptos'},
-  {name:'_okx_sui_', label:'SUI'},
-  {name:'tron', label:'Tron'},
-  {name:'okxOsmosJSBridge', label:'Osmosis'},
-  {name:'okxNostrJSBridge', label:'Nostr'},
-  {name:'okxInternalJSBridge', label:'Internal'},
-  {name:'interception', label:'Interception'},
-  {name:'native', label:'Native'},
-  {name:'okxInternalProvider', label:'InternalProvider'},
-  {name:'okxTonJSBridge', label:'TON'},
-  {name:'AndroidApi', label:'AndroidApi'}
-];
-
-// Step 1: detect all bridges (typeof only, no calls)
-var detected = [];
-var html = '';
-bridges.forEach(function(b) {
-  var t = typeof window[b.name];
-  var has = t !== 'undefined';
-  if (has) detected.push(b);
-  html += '<div class="' + (has ? 'found' : 'missing') + '">' +
-    (has ? '[+]' : '[-]') + ' ' + b.label + ' (' + b.name + '): ' + t;
-  if (has && typeof window[b.name] === 'object') {
-    try {
-      var keys = Object.getOwnPropertyNames(window[b.name]);
-      html += ' keys=[' + keys.join(',') + ']';
-    } catch(e) { html += ' keys=err'; }
-  }
-  html += '</div>';
-});
-document.getElementById('status').textContent = 'Detected: ' + detected.length + '/' + bridges.length;
-document.getElementById('bridges').innerHTML = html;
-
-// Step 2: create test buttons for each detected bridge
-var btnDiv = document.getElementById('buttons');
 var logEl = document.getElementById('log');
 var testLog = [];
-
 function addLog(msg) {
   testLog.push('[' + new Date().toLocaleTimeString() + '] ' + msg);
   logEl.textContent = testLog.join('\n');
+  // Auto-scroll
+  window.scrollTo(0, document.body.scrollHeight);
 }
 
-// Listen for async responses
+// === SECTION 1: Low-level native bridges ===
+var nativeBridges = [
+  '_solana_','okxBtcJSBridge','okxStarkJSBridge','_aptos_','_okx_sui_',
+  'tron','okxOsmosJSBridge','okxNostrJSBridge','okxInternalJSBridge',
+  'interception','native','okxInternalProvider','okxTonJSBridge','AndroidApi'
+];
+var nativeHtml = '';
+var nativeCount = 0;
+nativeBridges.forEach(function(n) {
+  var t = typeof window[n];
+  var has = t !== 'undefined';
+  if (has) nativeCount++;
+  nativeHtml += '<span class="' + (has?'found':'missing') + '">' +
+    (has?'+':'-') + n + '</span><br>';
+});
+document.getElementById('bridges').innerHTML = nativeHtml;
+
+// === SECTION 2: High-level providers (what DApps actually use) ===
+var providers = [
+  {name:'ethereum', label:'EVM (ethereum)'},
+  {name:'solana', label:'Solana Provider'},
+  {name:'okxwallet', label:'OKX Wallet'},
+  {name:'okxwallet.bitcoin', label:'OKX BTC'},
+  {name:'okxwallet.solana', label:'OKX Solana'},
+  {name:'okxwallet.aptos', label:'OKX Aptos'},
+  {name:'okxwallet.sui', label:'OKX SUI'},
+  {name:'okxwallet.ton', label:'OKX TON'},
+  {name:'okxwallet.tron', label:'OKX Tron'},
+  {name:'okxwallet.nostr', label:'OKX Nostr'},
+  {name:'okxwallet.starknet', label:'OKX StarkNet'},
+  {name:'phantom', label:'Phantom'},
+  {name:'solflare', label:'Solflare'},
+  {name:'starknet', label:'StarkNet'},
+  {name:'tronWeb', label:'TronWeb'},
+  {name:'tronLink', label:'TronLink'},
+  {name:'aptos', label:'Aptos'},
+];
+var provHtml = '';
+var provCount = 0;
+var detectedProviders = [];
+providers.forEach(function(p) {
+  var val;
+  try {
+    var parts = p.name.split('.');
+    val = window[parts[0]];
+    for (var i = 1; i < parts.length && val; i++) val = val[parts[i]];
+  } catch(e) { val = undefined; }
+  var has = typeof val !== 'undefined';
+  if (has) { provCount++; detectedProviders.push(p); }
+  var info = '';
+  if (has && val) {
+    try {
+      var keys = Object.getOwnPropertyNames(val).slice(0,10);
+      info = ' [' + keys.join(',') + ']';
+    } catch(e) {}
+  }
+  provHtml += '<span class="' + (has?'found':'missing') + '">' +
+    (has?'[+]':'[-]') + ' ' + p.label + ': ' + typeof val + info + '</span><br>';
+});
+document.getElementById('providers').innerHTML = provHtml;
+
+document.getElementById('status').textContent =
+  'Native:' + nativeCount + '/14 | Providers:' + provCount + '/' + providers.length;
+
+// === SECTION 3: Test buttons ===
+var btnDiv = document.getElementById('buttons');
+
+// Listen for async messages
 window.addEventListener('message', function(e) {
-  addLog('ASYNC MSG: origin=' + e.origin + ' data=' + JSON.stringify(e.data).substring(0, 300));
+  addLog('ASYNC: ' + JSON.stringify(e.data).substring(0, 400));
 });
 
-detected.forEach(function(b) {
-  // Skip ones we know are dangerous
-  if (b.name === 'okxInternalProvider') return; // crashes app
-  if (b.name === 'interception') return; // not a bridge
-  if (b.name === 'native') return; // H5 only
-
-  var btn = document.createElement('button');
-  btn.textContent = 'Test ' + b.label;
-  btn.onclick = function() {
-    addLog('--- Testing ' + b.label + ' (' + b.name + ') ---');
+// --- EVM: window.ethereum ---
+if (typeof window.ethereum !== 'undefined') {
+  var b1 = document.createElement('button');
+  b1.textContent = 'EVM: eth_accounts';
+  b1.onclick = function() {
+    addLog('--- EVM eth_accounts ---');
     try {
-      var obj = window[b.name];
-      // Log all properties
-      addLog('Type: ' + typeof obj);
-      try {
-        addLog('Keys: ' + Object.getOwnPropertyNames(obj).join(', '));
-      } catch(e) { addLog('Keys error: ' + e.message); }
-
-      // Try postMessage if available
-      if (typeof obj.postMessage === 'function') {
-        addLog('postMessage exists, calling connect...');
-        try {
-          var r = obj.postMessage(JSON.stringify({method:'connect', params:{}}));
-          addLog('connect result: ' + JSON.stringify(r));
-        } catch(e) { addLog('connect error: ' + e.message); }
-      } else {
-        addLog('No postMessage method');
-      }
-    } catch(e) {
-      addLog('ERROR: ' + e.message);
-    }
+      window.ethereum.request({method:'eth_accounts'}).then(function(r) {
+        addLog('eth_accounts: ' + JSON.stringify(r));
+      }).catch(function(e) { addLog('eth_accounts err: ' + e.message); });
+    } catch(e) { addLog('ERROR: ' + e.message); }
   };
-  btnDiv.appendChild(btn);
-});
+  btnDiv.appendChild(b1);
 
-// Special button: test getTK via internal bridge
-if (typeof window.okxInternalJSBridge !== 'undefined') {
-  var btn2 = document.createElement('button');
-  btn2.textContent = 'Test getTK (Internal)';
-  btn2.style.background = '#330';
-  btn2.onclick = function() {
-    addLog('--- Testing okxInternalJSBridge getTK ---');
+  var b2 = document.createElement('button');
+  b2.textContent = 'EVM: chainId';
+  b2.onclick = function() {
+    addLog('--- EVM chainId ---');
     try {
-      var r = window.okxInternalJSBridge.postMessage(JSON.stringify({uri:'request', method:'getTK', data:[]}));
-      addLog('getTK result: ' + JSON.stringify(r));
-    } catch(e) { addLog('getTK error: ' + e.message); }
-    try {
-      var r2 = window.okxInternalJSBridge.postMessage(JSON.stringify({uri:'request', method:'getUserInfo', data:[]}));
-      addLog('getUserInfo result: ' + JSON.stringify(r2));
-    } catch(e) { addLog('getUserInfo error: ' + e.message); }
+      window.ethereum.request({method:'eth_chainId'}).then(function(r) {
+        addLog('chainId: ' + r);
+      }).catch(function(e) { addLog('chainId err: ' + e.message); });
+    } catch(e) { addLog('ERROR: ' + e.message); }
   };
-  btnDiv.appendChild(btn2);
+  btnDiv.appendChild(b2);
+
+  var b3 = document.createElement('button');
+  b3.textContent = 'EVM: requestAccounts';
+  b3.className = 'warn';
+  b3.onclick = function() {
+    addLog('--- EVM eth_requestAccounts (may show popup) ---');
+    try {
+      window.ethereum.request({method:'eth_requestAccounts'}).then(function(r) {
+        addLog('requestAccounts: ' + JSON.stringify(r));
+      }).catch(function(e) { addLog('requestAccounts err: ' + e.message); });
+    } catch(e) { addLog('ERROR: ' + e.message); }
+  };
+  btnDiv.appendChild(b3);
 }
 
-// Special button: enumerate ALL window properties for hidden bridges
+// --- Solana: window.solana or window.okxwallet.solana ---
+var solProvider = window.solana || (window.okxwallet && window.okxwallet.solana);
+if (solProvider) {
+  var bs1 = document.createElement('button');
+  bs1.textContent = 'Solana: connect';
+  bs1.className = 'warn';
+  bs1.onclick = function() {
+    addLog('--- Solana connect ---');
+    try {
+      var p = solProvider.connect({onlyIfTrusted:true});
+      if (p && p.then) {
+        p.then(function(r) { addLog('Solana connected: ' + JSON.stringify(r)); })
+         .catch(function(e) { addLog('Solana connect err: ' + e.message); });
+      } else {
+        addLog('Solana connect sync: ' + JSON.stringify(p));
+      }
+    } catch(e) { addLog('ERROR: ' + e.message); }
+  };
+  btnDiv.appendChild(bs1);
+
+  var bs2 = document.createElement('button');
+  bs2.textContent = 'Solana: publicKey';
+  bs2.onclick = function() {
+    addLog('--- Solana publicKey ---');
+    try {
+      addLog('publicKey: ' + (solProvider.publicKey ? solProvider.publicKey.toString() : 'null'));
+      addLog('isConnected: ' + solProvider.isConnected);
+    } catch(e) { addLog('ERROR: ' + e.message); }
+  };
+  btnDiv.appendChild(bs2);
+}
+
+// --- OKX Wallet object ---
+if (typeof window.okxwallet !== 'undefined') {
+  var bo1 = document.createElement('button');
+  bo1.textContent = 'OKX: enumerate';
+  bo1.className = 'info';
+  bo1.onclick = function() {
+    addLog('--- OKX Wallet enumerate ---');
+    try {
+      var keys = Object.getOwnPropertyNames(window.okxwallet);
+      addLog('okxwallet keys: ' + keys.join(', '));
+      keys.forEach(function(k) {
+        try {
+          addLog('  .' + k + ' = ' + typeof window.okxwallet[k]);
+        } catch(e) {}
+      });
+    } catch(e) { addLog('ERROR: ' + e.message); }
+  };
+  btnDiv.appendChild(bo1);
+}
+
+// --- Internal bridge getTK ---
+if (typeof window.okxInternalJSBridge !== 'undefined') {
+  var bi1 = document.createElement('button');
+  bi1.textContent = 'Internal: getTK';
+  bi1.className = 'warn';
+  bi1.onclick = function() {
+    addLog('--- Internal getTK ---');
+    try {
+      var r = window.okxInternalJSBridge.postMessage(JSON.stringify({uri:'request',method:'getTK',data:[]}));
+      addLog('getTK: ' + JSON.stringify(r));
+    } catch(e) { addLog('getTK err: ' + e.message); }
+  };
+  btnDiv.appendChild(bi1);
+
+  var bi2 = document.createElement('button');
+  bi2.textContent = 'Internal: getUserInfo';
+  bi2.className = 'warn';
+  bi2.onclick = function() {
+    addLog('--- Internal getUserInfo ---');
+    try {
+      var r = window.okxInternalJSBridge.postMessage(JSON.stringify({uri:'request',method:'getUserInfo',data:[]}));
+      addLog('getUserInfo: ' + JSON.stringify(r));
+    } catch(e) { addLog('getUserInfo err: ' + e.message); }
+  };
+  btnDiv.appendChild(bi2);
+}
+
+// --- Nostr: getPublicKey ---
+var nostrProvider = (window.okxwallet && window.okxwallet.nostr) || window.nostr;
+if (nostrProvider) {
+  var bn1 = document.createElement('button');
+  bn1.textContent = 'Nostr: getPublicKey';
+  bn1.className = 'warn';
+  bn1.onclick = function() {
+    addLog('--- Nostr getPublicKey ---');
+    try {
+      var p = nostrProvider.getPublicKey();
+      if (p && p.then) {
+        p.then(function(r) { addLog('Nostr pubkey: ' + JSON.stringify(r)); })
+         .catch(function(e) { addLog('Nostr err: ' + e.message); });
+      } else {
+        addLog('Nostr pubkey sync: ' + JSON.stringify(p));
+      }
+    } catch(e) { addLog('ERROR: ' + e.message); }
+  };
+  btnDiv.appendChild(bn1);
+}
+
+// --- Scan ALL ---
 var btnAll = document.createElement('button');
-btnAll.textContent = 'Scan ALL window props';
-btnAll.style.background = '#033';
+btnAll.textContent = 'Scan ALL window';
+btnAll.className = 'info';
 btnAll.onclick = function() {
-  addLog('--- Scanning window properties ---');
-  var interesting = [];
-  var allKeys = Object.getOwnPropertyNames(window);
-  addLog('Total window props: ' + allKeys.length);
-  allKeys.forEach(function(k) {
+  addLog('--- Full window scan ---');
+  var found = [];
+  Object.getOwnPropertyNames(window).forEach(function(k) {
     try {
       var v = window[k];
-      if (v && typeof v === 'object' && typeof v.postMessage === 'function' && k !== 'window' && k !== 'self' && k !== 'frames' && k !== 'parent' && k !== 'top') {
-        interesting.push(k + ' (' + typeof v + ')');
+      if (v && typeof v === 'object' && k.length > 2 &&
+          ['window','self','frames','parent','top','document','navigator','location',
+           'screen','history','performance','caches','localStorage','sessionStorage',
+           'crypto','indexedDB','visualViewport'].indexOf(k) === -1) {
+        var keys = [];
+        try { keys = Object.getOwnPropertyNames(v).slice(0,5); } catch(e){}
+        found.push(k + ':{' + keys.join(',') + '}');
       }
     } catch(e) {}
   });
-  addLog('Objects with postMessage: ' + JSON.stringify(interesting));
+  addLog('Interesting objects (' + found.length + '):\n' + found.join('\n'));
 };
 btnDiv.appendChild(btnAll);
 
-document.title = 'v4:' + detected.length + 'bridges';
+document.title = 'v5:N' + nativeCount + '|P' + provCount;
 </script>
 </body>
 </html>
