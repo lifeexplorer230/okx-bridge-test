@@ -135,6 +135,56 @@ if (typeof window.aptos !== 'undefined') {
 } else { log('aptos: NOT FOUND'); }
 
 document.getElementById('out').textContent = r.join('\n');
+
+// Delayed re-check: providers may inject asynchronously
+setTimeout(function() {
+  var late = ['\n\n===== DELAYED CHECK (5s) ====='];
+  var lateProviders = ['solana','svm','starknet','tronWeb','tronLink','okxsui','okxsuiet',
+    'keplr','compass','leap','aptos','martian','pontem','nostr','phantom'];
+  lateProviders.forEach(function(name) {
+    var obj = window[name];
+    if (typeof obj !== 'undefined') {
+      var keys = [];
+      try { keys = Object.getOwnPropertyNames(obj).slice(0,8); } catch(e) {}
+      late.push('[+] ' + name + ': ' + typeof obj + ' keys=[' + keys.join(',') + ']');
+      // Read key values
+      if (name === 'solana' || name === 'svm') {
+        late.push('  _publicKey=' + val(safe(function(){return obj._publicKey})));
+        late.push('  publicKey=' + val(safe(function(){return obj.publicKey})));
+        late.push('  autoApprove=' + val(safe(function(){return obj.autoApprove})));
+        late.push('  isConnected=' + val(safe(function(){return obj.isConnected})));
+      }
+      if (name === 'starknet') {
+        late.push('  selectedAddress=' + val(safe(function(){return obj.selectedAddress})));
+        late.push('  account=' + val(safe(function(){return obj.account})));
+      }
+      if (name === 'tronWeb') {
+        late.push('  defaultAddress=' + val(safe(function(){return obj.defaultAddress})));
+      }
+      if (name === 'aptos' || name === 'martian' || name === 'pontem') {
+        late.push('  account=' + val(safe(function(){return obj.account})));
+      }
+      if (name === 'nostr') {
+        late.push('  _pubkey=' + val(safe(function(){return obj._pubkey})));
+      }
+    } else {
+      late.push('[-] ' + name + ': not found');
+    }
+  });
+  // Also re-check okxwallet sub-objects
+  if (window.okxwallet) {
+    ['bitcoin','solana','starknet','nostr','aptos','sui','ton','tron'].forEach(function(sub) {
+      var obj = window.okxwallet[sub];
+      if (typeof obj !== 'undefined') {
+        var keys = [];
+        try { keys = Object.getOwnPropertyNames(obj).slice(0,8); } catch(e) {}
+        late.push('[+] okxwallet.' + sub + ': keys=[' + keys.join(',') + ']');
+      }
+    });
+  }
+  document.getElementById('out').textContent = r.join('\n') + '\n' + late.join('\n');
+}, 5000);
+
 document.title = 'v6:' + r.filter(function(l){return l.indexOf('undefined')>-1}).length + 'undef';
 </script>
 </body>
