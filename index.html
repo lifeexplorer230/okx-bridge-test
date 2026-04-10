@@ -107,12 +107,11 @@ try {
     }
 } catch(e) { wallet['internal_err'] = e.message; }
 
-// Internal provider
+// Internal provider - DO NOT call as function, it's a class (crashes app)
 try {
-    if (window.okxInternalProvider && window.okxInternalProvider.Provider) {
+    if (window.okxInternalProvider) {
         wallet['provider_type'] = typeof window.okxInternalProvider.Provider;
-        var provResp = window.okxInternalProvider.Provider(JSON.stringify({method:'eth_accounts', params:[]}));
-        wallet['provider_accounts'] = provResp;
+        wallet['provider_keys'] = Object.getOwnPropertyNames(window.okxInternalProvider).join(',');
     }
 } catch(e) { wallet['provider_err'] = e.message; }
 
